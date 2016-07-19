@@ -5,5 +5,7 @@ TARGET = qtethminer
 
 include(qtethminer.pri)
 
-SOURCES += ethereumminer.cpp
-HEADERS += ethereumminer.h
+SOURCES += ethereumminer.cpp \
+    stratumclient.cpp
+HEADERS += ethereumminer.h \
+    stratumclient.h

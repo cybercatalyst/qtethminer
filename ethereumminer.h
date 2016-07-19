@@ -5,15 +5,12 @@
 #include "ethashseal/EthashCPUMiner.h"
 #include "ethash-cl/ethash_cl_miner.h"
 
-#include <QTcpSocket>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonArray>
 #include <QTimer>
-#include <QTimerEvent>
 #include <QThread>
 
 #include <stdint.h>
+
+#include "stratumclient.h"
 
 class EthereumMiner: public QThread {
 	Q_OBJECT
@@ -36,12 +33,19 @@ public:
     void setPass(QString pass) { m_pass = pass; }
     void setServer(QString server) { m_server = server; }
     void setPort(unsigned port) { m_port = port; }
-    void disablePrecompute() { m_precompute = false; }
+    void disablePrecompute() { _precomputeDAG = false; }
     void listDevices() { dev::eth::EthashGPUMiner::listDevices(); emit finished(); }
 
 public slots:
     void run();
-    void submitWork(QString nonce, QString headerHash, QString mixHash);
+
+private slots:
+    void connectToServer();
+    void login();
+    void requestWorkPackage();
+    void processWorkPackage(QString headerHash, QString seedHash, QString boundary);
+
+    void updateHashrate();
 
 signals:
     void hashrate(int hashrate);
@@ -49,8 +53,11 @@ signals:
     void dagCreationProgress(int progressCount);
     void receivedWorkPackage(QString headerHash, QString seedHash, QString boundary);
     void solutionFound(QString nonce, QString headerHash, QString mixHash);
+    void dagCreationFailure();
 
-    private:
+private:
+    StratumClient *_stratumClient;
+
     std::string _minerType = "cpu";
     unsigned _openclPlatform = 0;
     unsigned _openclDevice = 0;
@@ -58,7 +65,7 @@ signals:
     uint64_t _currentBlock = 0;
     bool _clAllowCPU = false;
     unsigned _extraGPUMemory = 64000000;
-    bool m_precompute = true;
+    bool _precomputeDAG = true;
     QString m_user = "";
     QString m_pass = "x";
     QString m_server = "ethpool.org";
@@ -68,35 +75,12 @@ signals:
     unsigned _localWorkSize = ethash_cl_miner::c_defaultLocalWorkSize;
     unsigned _msPerBatch = ethash_cl_miner::c_defaultMSPerBatch;
 
-    // default value is 350MB of GPU memory for other stuff (windows system rendering, e.t.c.)
-
-    struct NoWork {};
-
-    dev::eth::EthashProofOfWork::WorkPackage current;
+    dev::eth::EthashProofOfWork::WorkPackage _currentWorkPackage;
     dev::eth::GenericFarm<dev::eth::EthashProofOfWork> _powFarm;
     dev::eth::EthashAux::FullType dag;
 
-    QTcpSocket *_tcpSocket;
-    std::map<double,QString> requests;
-
     QTimer *_hashrateReportTimer;
-    QTimer *_serverPingTimer;
 
-    int requestCounter = 1;
-    void processWorkPackage(QJsonArray workData);
-
-    void initializeMining();
-    void sendGetWorkRequest();
-
-private slots:  
-    void connected();
-    void disconnected();
-    void readyRead();
-
-    void updateHashrate();
-    void pingServer();
-
-private:
-    void reconnect();
+    void prepareMiner();
 };
 
