@@ -19,9 +19,10 @@ LIBS += \
 LIBS += \
     -L../qtethminer -lqtethminer
 
+# webthree-umbrella libs and dependencies
 LIBS += \
     -lethashseal \
     -lethash-cl \
-    -lboost_system \
     -ldevcore \
+    -lboost_system \
     -lboost_thread

@@ -20,39 +20,30 @@
 
 #pragma once
 
-// Qt includes
-#include <QObject>
-#include <QTcpSocket>
-#include <QJsonArray>
+// Own includes
+#include "stratumclient.h"
 
-class StratumClient :
+class EthereumProtocol :
     public QObject {
     Q_OBJECT
 public:
-    explicit StratumClient(QObject *parent = 0);
+    EthereumProtocol(QObject *parent = 0);
 
-    void sendJsonRpc(QString method, QJsonArray parameters);
-
-signals:
-    void connectedToServer();
-    void disconnectedFromServer();
-
-    void jsonReplyReceived(QString method, QJsonArray result);
+    StratumClient *stratumClient();
 
 public slots:
-    void connectToServer(QString server, uint port);
+    void eth_login(QString username, QString password);
+    void eth_getWork();
+    void eth_submitWork(QString nonce, QString headerHash, QString mixHash);
+
+signals:
+    void eth_login(bool success);
+    void eth_getWork(QString headerHash, QString seedHash, QString boundary);
+    void eth_submitWork(bool success);
 
 private slots:
-    void connected();
-    void disconnected();
-    void readyRead();
+    void translateReply(QString method, QJsonArray result);
 
 private:
-    int incrementRequestCounter();
-
-
-    QTcpSocket *_tcpSocket;
-
-    int requestCounter = 1;
-    QMap<int, QString> _pendingRequests;
+    StratumClient _stratumClient;
 };

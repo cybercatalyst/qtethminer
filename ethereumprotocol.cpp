@@ -18,41 +18,47 @@
 //                                                                           //
 ///////////////////////////////////////////////////////////////////////////////
 
-#pragma once
+#include "ethereumprotocol.h"
 
-// Qt includes
-#include <QObject>
-#include <QTcpSocket>
-#include <QJsonArray>
+#define ETH_LOGIN "eth_login"
+#define ETH_GETWORK "eth_getWork"
+#define ETH_SUBMITWORK "eth_submitWork"
 
-class StratumClient :
-    public QObject {
-    Q_OBJECT
-public:
-    explicit StratumClient(QObject *parent = 0);
+EthereumProtocol::EthereumProtocol(QObject *parent) :
+    QObject(parent) {
+    connect(&_stratumClient, SIGNAL(jsonReplyReceived(QString,QJsonArray)),
+            this, SLOT(translateReply(QString,QJsonArray)));
+}
 
-    void sendJsonRpc(QString method, QJsonArray parameters);
+StratumClient *EthereumProtocol::stratumClient() {
+    return &_stratumClient;
+}
 
-signals:
-    void connectedToServer();
-    void disconnectedFromServer();
+void EthereumProtocol::eth_login(QString username, QString password) {
+    _stratumClient.sendJsonRpc(ETH_LOGIN, { username, password });
+}
 
-    void jsonReplyReceived(QString method, QJsonArray result);
+void EthereumProtocol::eth_getWork() {
+    _stratumClient.sendJsonRpc(ETH_GETWORK, { });
+}
 
-public slots:
-    void connectToServer(QString server, uint port);
+void EthereumProtocol::eth_submitWork(QString nonce, QString headerHash, QString mixHash) {
+    _stratumClient.sendJsonRpc(ETH_SUBMITWORK, { nonce, headerHash, mixHash });
+}
 
-private slots:
-    void connected();
-    void disconnected();
-    void readyRead();
+void EthereumProtocol::translateReply(QString method, QJsonArray result) {
+    if (method == "" || method == ETH_GETWORK) {
+        qDebug() << "Push: New work package received";
+        emit eth_getWork(result[0].toString(), result[1].toString(), result[2].toString());
+    }
 
-private:
-    int incrementRequestCounter();
+    if (method == ETH_LOGIN) {
+        qDebug() << "Login to stratum server successful";
+        emit eth_login(true);
+    }
 
-
-    QTcpSocket *_tcpSocket;
-
-    int requestCounter = 1;
-    QMap<int, QString> _pendingRequests;
-};
+    if (method == ETH_SUBMITWORK) {
+        qDebug() << "Share submitted to server!";
+        emit eth_submitWork(true);
+    }
+}

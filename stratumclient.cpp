@@ -1,8 +1,29 @@
-#include "stratumclient.h"
+///////////////////////////////////////////////////////////////////////////////
+//                                                                           //
+//    This file is part of QtEthminer.                                       //
+//    Copyright (C) 2015-2016 Jacob Dawid, jacob@omg-it.works                //
+//                                                                           //
+//    QtEthminer is free software: you can redistribute it and/or modify     //
+//    it under the terms of the GNU Affero General Public License as         //
+//    published by the Free Software Foundation, either version 3 of the     //
+//    License, or (at your option) any later version.                        //
+//                                                                           //
+//    QtEthminer is distributed in the hope that it will be useful,          //
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of         //
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the          //
+//    GNU Affero General Public License for more details.                    //
+//                                                                           //
+//    You should have received a copy of the GNU General Public License      //
+//    along with QtEthminer. If not, see <http://www.gnu.org/licenses/>.     //
+//                                                                           //
+///////////////////////////////////////////////////////////////////////////////
 
+// Qt includes
 #include <QJsonObject>
-#include <QJsonArray>
 #include <QJsonDocument>
+
+// Own includes
+#include "stratumclient.h"
 
 StratumClient::StratumClient(QObject *parent) : QObject(parent) {
     _tcpSocket = new QTcpSocket(this);
@@ -20,52 +41,6 @@ void StratumClient::connectToServer(QString server, uint port) {
     _tcpSocket->connectToHost(server, port);
 }
 
-void StratumClient::eth_login(QString username, QString password) {
-    int requestId = incrementRequestCounter();
-
-    QJsonObject obj;
-    obj["jsonrpc"] = "2.0";
-    obj["method"] = "eth_login";
-    QJsonArray params = { username, password };
-    obj["params"] = params;
-    obj["id"] = requestId;
-    _pendingRequests[requestId] = "eth_login";
-    QByteArray doc = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    doc.append("\n");
-    _tcpSocket->write(doc);
-}
-
-void StratumClient::eth_getWork() {
-    int requestId = requestCounter++;
-    _pendingRequests[requestId] = "eth_getWork";
-    QJsonObject obj;
-    obj["jsonrpc"] = "2.0";
-    obj["method"] = "eth_getWork";
-    QJsonArray params = { };
-    obj["params"] = params;
-    obj["id"] = requestId;
-    QByteArray doc = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    doc.append("\n");
-
-    _tcpSocket->write(doc);
-}
-
-void StratumClient::eth_submitWork(QString nonce, QString headerHash, QString mixHash) {
-    int requestId = incrementRequestCounter();
-
-    QJsonObject obj;
-    obj["jsonrpc"] = "2.0";
-    obj["method"] = "eth_submitWork";
-    QJsonArray params = { nonce, headerHash, mixHash };
-    obj["params"] = params;
-    obj["id"] = requestId;
-    _pendingRequests[requestId] = "eth_submitWork";
-
-    QByteArray doc = QJsonDocument(obj).toJson(QJsonDocument::Compact);
-    doc.append("\n");
-    _tcpSocket->write(doc);
-}
-
 void StratumClient::connected() {
     qDebug() << "Connection to stratum server established.";
     emit connectedToServer();
@@ -81,41 +56,35 @@ int StratumClient::incrementRequestCounter() {
     return (requestCounter = requestCounter++);
 }
 
-void StratumClient::readyRead() {
-    // read the data from the socket
-    QJsonDocument document = QJsonDocument::fromJson(_tcpSocket->readAll());
-    QJsonObject object = document.object();
-    QJsonValue jsonValue = object.value("id");
-    int id = jsonValue.toInt();
+void StratumClient::sendJsonRpc(QString method, QJsonArray parameters) {
+    int requestId = incrementRequestCounter();
+    _pendingRequests[requestId] = method;
 
+    QJsonObject obj;
+    obj["jsonrpc"] = "2.0";
+    obj["method"] = method;
+    obj["params"] = parameters;
+    obj["id"] = requestId;
+    QByteArray data = QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    data.append("\n");
+    _tcpSocket->write(data);
+}
+
+void StratumClient::readyRead() {
+    QJsonObject object = QJsonDocument::fromJson(_tcpSocket->readAll())
+        .object();
+
+    int id = object.value("id").toInt();
     QJsonValue result = object.value("result");
 
-    if (result.isBool() && !result.toBool()) {
-        qDebug() << "Stratum Server error:" << object.value("error").toString();
+    if(result.isBool() && !result.toBool()) {
+        qDebug() << "Stratum Server error:"
+                 << object.value("error").toString();
         return;
     }
 
-    if (id == 0) {
-        qDebug() << "Push: New work package received";
-        QJsonArray workData = object["result"].toArray();
-        emit eth_getWork(workData[0].toString(), workData[1].toString(), workData[2].toString());
-    } else {
-        QString method = _pendingRequests[id];
-        if (method == "eth_login") {
-            _pendingRequests.remove(id);
-            qDebug() << "Login to stratum server successful";
-            emit eth_login(true);
-        }
-        if (method == "eth_getWork") {
-            _pendingRequests.remove(id);
-            qDebug() << "Work package received";
-            QJsonArray workData = object["result"].toArray();
-            emit eth_getWork(workData[0].toString(), workData[1].toString(), workData[2].toString());
-        }
-        if (method == "eth_submitWork") {
-            _pendingRequests.remove(id);
-            qDebug() << "Share submitted to server!";
-            emit eth_submitWork(true);
-        }
-    }
+    QString method = _pendingRequests.value(id, "");
+    emit jsonReplyReceived(method, result.toArray());
+
+    _pendingRequests.remove(id);
 }
