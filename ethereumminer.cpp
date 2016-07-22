@@ -23,9 +23,9 @@
 // Qt includes
 #include <QDebug>
 
-EthereumMiner::EthereumMiner() :
-    QObject(0) {
-    _ethereumProtocol = new EthereumProtocol();
+EthereumMiner::EthereumMiner(QObject *parent) :
+    QObject(parent) {
+    _ethereumProtocol = new EthereumProtocol(this);
 
     // When losing connection, handle this.
     connect(_ethereumProtocol->stratumClient(), SIGNAL(disconnectedFromServer()), this, SLOT(handleDisconnect()));
@@ -40,11 +40,20 @@ EthereumMiner::EthereumMiner() :
 EthereumMiner::~EthereumMiner() {
 }
 
+QThread* EthereumMiner::processInBackground() {
+    QThread *workerThread = new QThread();
+    moveToThread(workerThread);
+    workerThread->start();
+    return workerThread;
+}
+
 void EthereumMiner::startMining() {
+    emit currentStep(Starting);
     QMetaObject::invokeMethod(this, "begin");
 }
 
 void EthereumMiner::stopMining() {
+    emit currentStep(Halted);
     QMetaObject::invokeMethod(this, "halt");
 }
 
@@ -61,10 +70,12 @@ void EthereumMiner::handleDisconnect() {
 }
 
 void EthereumMiner::connectToServer() {
+    emit currentStep(Connecting);
     _ethereumProtocol->stratumClient()->connectToServer(_configuration.server, _configuration.port);
 }
 
 void EthereumMiner::login() {
+    emit currentStep(LoggingIn);
     _ethereumProtocol->eth_login(_configuration.username, _configuration.password);
 }
 
@@ -129,6 +140,7 @@ void EthereumMiner::loadSettings(QSettings& settings) {
 }
 
 void EthereumMiner::processWorkPackage(QString headerHash, QString seedHash, QString boundary) {
+    emit currentStep(Mining);
     emit receivedWorkPackage(headerHash, seedHash, boundary);
 
     dev::h256 newHeaderHash(headerHash.toStdString());
@@ -140,6 +152,7 @@ void EthereumMiner::processWorkPackage(QString headerHash, QString seedHash, QSt
 
     if(!(dag = dev::eth::EthashAux::full(newSeedHash, true, [&](unsigned progressCount) {
        emit dagCreationProgress(progressCount);
+       emit currentStep(BuildingDAG);
        return 0;
     }))) {
         emit dagCreationFailure();
@@ -160,10 +173,9 @@ void EthereumMiner::processWorkPackage(QString headerHash, QString seedHash, QSt
 }
 
 void EthereumMiner::begin() {
-    connectToServer();
-
     if(_configuration.minerType == CPUMiner) {
         dev::eth::EthashCPUMiner::setNumInstances(_configuration.maxMiningThreads);
+        emit platformInfo(QString::fromStdString(dev::eth::EthashCPUMiner::platformInfo()));
     } else if (_configuration.minerType == OpenCLMiner) {
         if(!dev::eth::EthashGPUMiner::configureGPU(
                     _configuration.localWorkSize,
@@ -178,6 +190,7 @@ void EthereumMiner::begin() {
             emit error("Failed to initialize GPU miner.");
         }
         dev::eth::EthashGPUMiner::setNumInstances(_configuration.maxMiningThreads);
+        emit platformInfo(QString::fromStdString(dev::eth::EthashGPUMiner::platformInfo()));
     }
     
     std::map<std::string, dev::eth::GenericFarm<dev::eth::EthashProofOfWork>::SealerDescriptor> sealers;
@@ -205,6 +218,8 @@ void EthereumMiner::begin() {
         _ethereumProtocol->eth_getWork();
         return true;
     });
+
+    connectToServer();
 }
 
 void EthereumMiner::halt() {

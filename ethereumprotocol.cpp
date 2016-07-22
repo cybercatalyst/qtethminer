@@ -26,7 +26,7 @@
 
 EthereumProtocol::EthereumProtocol(QObject *parent) :
     QObject(parent) {
-    _stratumClient = new StratumClient();
+    _stratumClient = new StratumClient(this);
     connect(_stratumClient, SIGNAL(jsonReplyReceived(QString,QJsonArray)),
             this, SLOT(translateReply(QString,QJsonArray)));
 }

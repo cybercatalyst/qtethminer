@@ -27,7 +27,7 @@
 
 StratumClient::StratumClient(QObject *parent) :
     QObject(parent) {
-    _tcpSocket = new QTcpSocket();
+    _tcpSocket = new QTcpSocket(this);
     connect(_tcpSocket, SIGNAL(connected()),
             this, SLOT(connected()));
     connect(_tcpSocket, SIGNAL(disconnected()),

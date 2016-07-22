@@ -43,6 +43,15 @@ public:
         OpenCLMiner
     };
 
+    enum Step {
+        Starting,
+        Halted,
+        Connecting,
+        LoggingIn,
+        Mining,
+        BuildingDAG
+    };
+
     struct MiningConfiguration {
         MinerType minerType;
         unsigned openclPlatform;
@@ -62,8 +71,10 @@ public:
         unsigned msPerBatch;
     };
 
-    EthereumMiner();
+    EthereumMiner(QObject *parent = 0);
     ~EthereumMiner();
+
+    QThread *processInBackground();
 
     void setMiningConfiguration(MiningConfiguration miningConfiguration) {
         _configuration = miningConfiguration;
@@ -99,6 +110,8 @@ signals:
     void solutionFound(QString nonce, QString headerHash, QString mixHash);
     void dagCreationFailure();
     void error(QString message);
+    void platformInfo(QString platformInfo);
+    void currentStep(EthereumMiner::Step step);
 
 private:
     const char* sealerString(MinerType minerType);
