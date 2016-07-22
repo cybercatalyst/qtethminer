@@ -45,21 +45,21 @@ public:
 
     struct MiningConfiguration {
         MinerType minerType;
-        unsigned openclPlatform = 0;
-        unsigned openclDevice = 0;
-        unsigned maxMiningThreads = UINT_MAX;
-        uint64_t currentBlock = 0;
-        bool recognizeCPUAsOpenCLDevice = false;
-        unsigned extraGPUMemory = 64000000;
-        bool precomputeNextDAG = true;
-        QString username = "";
-        QString password = "x";
-        QString server = "ethpool.org";
-        unsigned port = 3333;
+        unsigned openclPlatform;
+        unsigned openclDevice;
+        unsigned maxMiningThreads;
+        uint64_t currentBlock;
+        bool recognizeCPUAsOpenCLDevice;
+        unsigned extraGPUMemory;
+        bool precomputeNextDAG;
+        QString username;
+        QString password;
+        QString server;
+        unsigned port;
 
-        unsigned globalWorkSizeMultiplier = ethash_cl_miner::c_defaultGlobalWorkSizeMultiplier;
-        unsigned localWorkSize = ethash_cl_miner::c_defaultLocalWorkSize;
-        unsigned msPerBatch = ethash_cl_miner::c_defaultMSPerBatch;
+        unsigned globalWorkSizeMultiplier;
+        unsigned localWorkSize;
+        unsigned msPerBatch;
     };
 
     EthereumMiner();

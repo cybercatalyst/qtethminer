@@ -50,9 +50,11 @@ private slots:
 private:
     int incrementRequestCounter();
 
-
     QTcpSocket *_tcpSocket;
 
     int requestCounter = 1;
+    // Theoretically, it could be possible that failing requests
+    // may never get wiped out of this map. This is not urgent,
+    // but should be checked.
     QMap<int, QString> _pendingRequests;
 };
