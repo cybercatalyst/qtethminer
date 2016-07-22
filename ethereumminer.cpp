@@ -24,61 +24,111 @@
 #include <QDebug>
 
 EthereumMiner::EthereumMiner() :
-    QThread(0) {
-    moveToThread(this);
+    QObject(0) {
+    _ethereumProtocol = new EthereumProtocol();
+
+    // When losing connection, handle this.
+    connect(_ethereumProtocol->stratumClient(), SIGNAL(disconnectedFromServer()), this, SLOT(handleDisconnect()));
+    // Once we login to the server, we want to login in right after that.
+    connect(_ethereumProtocol->stratumClient(), SIGNAL(connectedToServer()), this, SLOT(login()));
+    // Once we have logged in, query for work.
+    connect(_ethereumProtocol, SIGNAL(eth_login(bool)), _ethereumProtocol, SLOT(eth_getWork()));
+    // Evertime we receive a work package, work on it.
+    connect(_ethereumProtocol, SIGNAL(eth_getWork(QString,QString,QString)), this, SLOT(processWorkPackage(QString,QString,QString)));
 }
 
 EthereumMiner::~EthereumMiner() {
 }
 
 void EthereumMiner::startMining() {
-    start();
+    QMetaObject::invokeMethod(this, "begin");
 }
 
 void EthereumMiner::stopMining() {
-    quit();
+    QMetaObject::invokeMethod(this, "halt");
 }
 
 void EthereumMiner::restartMining() {
-    quit();
-    start();
+    stopMining();
+    startMining();
 }
 
-void EthereumMiner::run() {
-    _hashrateReportTimer = new QTimer(this);
-    _hashrateReportTimer->setInterval(500);
-
-    connect(_hashrateReportTimer, SIGNAL(timeout()), this, SLOT(updateHashrate()));
-
-    connect(_ethereumProtocol.stratumClient(), SIGNAL(disconnectedFromServer()), this, SLOT(connectToServer()));
-    connect(_ethereumProtocol.stratumClient(), SIGNAL(connectedToServer()), this, SLOT(login()));
-    connect(&_ethereumProtocol, SIGNAL(eth_login(bool)), &_ethereumProtocol, SLOT(eth_getWork()));
-    connect(&_ethereumProtocol, SIGNAL(eth_getWork(QString,QString,QString)), this, SLOT(processWorkPackage(QString,QString,QString)));
-
-    connectToServer();
-
-    _hashrateReportTimer->start();
-    prepareMiner();
-    exec();
+void EthereumMiner::handleDisconnect() {
+    // In case we are mining, we obviously want to reconnect.
+    if(_powFarm.isMining()) {
+        connectToServer();
+    }
 }
 
 void EthereumMiner::connectToServer() {
-    _ethereumProtocol.stratumClient()->connectToServer(_configuration.m_server, _configuration.m_port);
+    _ethereumProtocol->stratumClient()->connectToServer(_configuration.server, _configuration.port);
 }
 
 void EthereumMiner::login() {
-    _ethereumProtocol.eth_login(_configuration.m_user, _configuration.m_pass);
+    _ethereumProtocol->eth_login(_configuration.username, _configuration.password);
 }
 
-void EthereumMiner::updateHashrate() {
+int EthereumMiner::hashrate() {
     dev::eth::WorkingProgress wp = _powFarm.miningProgress();
     _powFarm.resetMiningProgress();
-    qDebug() << "Mining at" << (int)wp.rate() << "H/s";
-    emit hashrate((int)wp.rate());
+    return (int)wp.rate();
+}
+
+void EthereumMiner::saveSettings(QSettings& settings) {
+    switch(_configuration.minerType) {
+        case CPUMiner:
+            settings.setValue("minerType", "CPUMiner");
+        break;
+        case OpenCLMiner:
+            settings.setValue("minerType", "OpenCLMiner");
+        break;
+    }
+
+    settings.setValue("openclPlatform", _configuration.openclPlatform);
+    settings.setValue("openclDevice", _configuration.openclDevice);
+    settings.setValue("maxMiningThreads", _configuration.maxMiningThreads);
+    settings.setValue("currentBlock", (int)_configuration.currentBlock);
+    settings.setValue("recognizeCPUAsOpenCLDevice", _configuration.recognizeCPUAsOpenCLDevice);
+    settings.setValue("extraGPUMemory", _configuration.extraGPUMemory);
+    settings.setValue("precomputeNextDAG", _configuration.precomputeNextDAG);
+    settings.setValue("username", _configuration.username);
+    settings.setValue("password", _configuration.password);
+    settings.setValue("server", _configuration.server);
+    settings.setValue("port", _configuration.port);
+    settings.setValue("globalWorkSizeMultiplier", _configuration.globalWorkSizeMultiplier);
+    settings.setValue("localWorkSize", _configuration.localWorkSize);
+    settings.setValue("msPerBatch", _configuration.msPerBatch);
+    settings.sync();
+}
+
+void EthereumMiner::loadSettings(QSettings& settings) {
+    settings.sync();
+
+    QString minerTypeString = settings.value("minerType").toString();
+    if(minerTypeString == "CPUMiner") {
+        _configuration.minerType = CPUMiner;
+    } else
+    if(minerTypeString == "OpenCLMiner") {
+        _configuration.minerType = OpenCLMiner;
+    }
+
+    _configuration.openclPlatform = settings.value("openclPlatform").toInt();
+    _configuration.openclDevice = settings.value("openclDevice").toInt();
+    _configuration.maxMiningThreads = settings.value("maxMiningThreads").toInt();
+    _configuration.currentBlock = settings.value("currentBlock").toInt();
+    _configuration.recognizeCPUAsOpenCLDevice = settings.value("recognizeCPUAsOpenCLDevice").toBool();
+    _configuration.extraGPUMemory = settings.value("extraGPUMemory").toInt();
+    _configuration.precomputeNextDAG = settings.value("precomputeNextDAG").toBool();
+    _configuration.username = settings.value("username").toString();
+    _configuration.password = settings.value("password").toString();
+    _configuration.server = settings.value("server").toString();
+    _configuration.port = settings.value("port").toInt();
+    _configuration.globalWorkSizeMultiplier = settings.value("globalWorkSizeMultiplier").toInt();
+    _configuration.localWorkSize = settings.value("localWorkSize").toInt();
+    _configuration.msPerBatch = settings.value("msPerBatch").toInt();
 }
 
 void EthereumMiner::processWorkPackage(QString headerHash, QString seedHash, QString boundary) {
-    qDebug() << "Received work package.";
     emit receivedWorkPackage(headerHash, seedHash, boundary);
 
     dev::h256 newHeaderHash(headerHash.toStdString());
@@ -95,7 +145,7 @@ void EthereumMiner::processWorkPackage(QString headerHash, QString seedHash, QSt
         emit dagCreationFailure();
     }
 
-    if(_configuration._precomputeDAG) {
+    if(_configuration.precomputeNextDAG) {
         dev::eth::EthashAux::computeFull(dev::sha3(newSeedHash), true);
     }
 
@@ -109,31 +159,33 @@ void EthereumMiner::processWorkPackage(QString headerHash, QString seedHash, QSt
     }
 }
 
-void EthereumMiner::prepareMiner() {
-    if(_configuration._minerType == "cpu") {
-        dev::eth::EthashCPUMiner::setNumInstances(_configuration.m_miningThreads);
-    } else if (_configuration._minerType == "opencl") {
+void EthereumMiner::begin() {
+    connectToServer();
+
+    if(_configuration.minerType == CPUMiner) {
+        dev::eth::EthashCPUMiner::setNumInstances(_configuration.maxMiningThreads);
+    } else if (_configuration.minerType == OpenCLMiner) {
         if(!dev::eth::EthashGPUMiner::configureGPU(
-                    _configuration._localWorkSize,
-                    _configuration._globalWorkSizeMultiplier,
-                    _configuration._msPerBatch,
-                    _configuration._openclPlatform,
-                    _configuration._openclDevice,
-                    _configuration._clAllowCPU,
-                    _configuration._extraGPUMemory,
-                    _configuration._currentBlock
+                    _configuration.localWorkSize,
+                    _configuration.globalWorkSizeMultiplier,
+                    _configuration.msPerBatch,
+                    _configuration.openclPlatform,
+                    _configuration.openclDevice,
+                    _configuration.recognizeCPUAsOpenCLDevice,
+                    _configuration.extraGPUMemory,
+                    _configuration.currentBlock
                     )) {
             emit error("Failed to initialize GPU miner.");
         }
-        dev::eth::EthashGPUMiner::setNumInstances(_configuration.m_miningThreads);
+        dev::eth::EthashGPUMiner::setNumInstances(_configuration.maxMiningThreads);
     }
     
     std::map<std::string, dev::eth::GenericFarm<dev::eth::EthashProofOfWork>::SealerDescriptor> sealers;
-    sealers["cpu"] = dev::eth::GenericFarm<dev::eth::EthashProofOfWork>::SealerDescriptor{&dev::eth::EthashCPUMiner::instances, [](dev::eth::GenericMiner<dev::eth::EthashProofOfWork>::ConstructionInfo ci){ return new dev::eth::EthashCPUMiner(ci); }};
-    sealers["opencl"] = dev::eth::GenericFarm<dev::eth::EthashProofOfWork>::SealerDescriptor{&dev::eth::EthashGPUMiner::instances, [](dev::eth::GenericMiner<dev::eth::EthashProofOfWork>::ConstructionInfo ci){ return new dev::eth::EthashGPUMiner(ci); }};
+    sealers[sealerString(CPUMiner)] = dev::eth::GenericFarm<dev::eth::EthashProofOfWork>::SealerDescriptor{&dev::eth::EthashCPUMiner::instances, [](dev::eth::GenericMiner<dev::eth::EthashProofOfWork>::ConstructionInfo ci){ return new dev::eth::EthashCPUMiner(ci); }};
+    sealers[sealerString(OpenCLMiner)] = dev::eth::GenericFarm<dev::eth::EthashProofOfWork>::SealerDescriptor{&dev::eth::EthashGPUMiner::instances, [](dev::eth::GenericMiner<dev::eth::EthashProofOfWork>::ConstructionInfo ci){ return new dev::eth::EthashGPUMiner(ci); }};
 
     _powFarm.setSealers(sealers);
-    _powFarm.start(_configuration._minerType);
+    _powFarm.start(sealerString(_configuration.minerType));
     _powFarm.onSolutionFound([&](dev::eth::EthashProofOfWork::Solution sol) {
         QString nonce = "0x" + QString::fromStdString(sol.nonce.hex());
         QString headerHash = "0x" + QString::fromStdString(_currentWorkPackage.headerHash.hex());
@@ -147,12 +199,27 @@ void EthereumMiner::prepareMiner() {
         qDebug() << "  Target: " << QString::fromStdString(dev::h256(_currentWorkPackage.boundary).hex());
         qDebug() << "  Ethash: " << QString::fromStdString(dev::h256(dev::eth::EthashAux::eval(_currentWorkPackage.seedHash, _currentWorkPackage.headerHash, sol.nonce).value).hex());
 
-        _ethereumProtocol.eth_submitWork(nonce, headerHash, mixHash);
+        _ethereumProtocol->eth_submitWork(nonce, headerHash, mixHash);
         emit solutionFound(nonce, headerHash, mixHash);
         _currentWorkPackage.reset();
-        _ethereumProtocol.eth_getWork();
+        _ethereumProtocol->eth_getWork();
         return true;
     });
+}
+
+void EthereumMiner::halt() {
+    _powFarm.stop();
+}
+
+const char* EthereumMiner::sealerString(MinerType minerType) {
+    switch(minerType) {
+        case CPUMiner:
+            return "cpu";
+        case OpenCLMiner:
+            return "opencl";
+        default:
+            return "unknown";
+    }
 }
 
 

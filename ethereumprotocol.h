@@ -45,5 +45,5 @@ private slots:
     void translateReply(QString method, QJsonArray result);
 
 private:
-    StratumClient _stratumClient;
+    StratumClient *_stratumClient;
 };

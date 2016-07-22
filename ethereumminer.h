@@ -27,41 +27,39 @@
 
 #include <QTimer>
 #include <QThread>
+#include <QSettings>
 
 #include <stdint.h>
 
 #include "ethereumprotocol.h"
 
-class EthereumMiner: public QThread {
+class EthereumMiner :
+    public QObject {
 	Q_OBJECT
 
 public:
-    enum MiningStatus {
-        Idle,
-        Connecting,
-        LoggingIn,
-        WaitingForWork,
-        Mining,
-        SubmittingWork
+    enum MinerType {
+        CPUMiner,
+        OpenCLMiner
     };
 
     struct MiningConfiguration {
-        std::string _minerType = "cpu";
-        unsigned _openclPlatform = 0;
-        unsigned _openclDevice = 0;
-        unsigned m_miningThreads = UINT_MAX;
-        uint64_t _currentBlock = 0;
-        bool _clAllowCPU = false;
-        unsigned _extraGPUMemory = 64000000;
-        bool _precomputeDAG = true;
-        QString m_user = "";
-        QString m_pass = "x";
-        QString m_server = "ethpool.org";
-        unsigned m_port = 3333;
+        MinerType minerType;
+        unsigned openclPlatform = 0;
+        unsigned openclDevice = 0;
+        unsigned maxMiningThreads = UINT_MAX;
+        uint64_t currentBlock = 0;
+        bool recognizeCPUAsOpenCLDevice = false;
+        unsigned extraGPUMemory = 64000000;
+        bool precomputeNextDAG = true;
+        QString username = "";
+        QString password = "x";
+        QString server = "ethpool.org";
+        unsigned port = 3333;
 
-        unsigned _globalWorkSizeMultiplier = ethash_cl_miner::c_defaultGlobalWorkSizeMultiplier;
-        unsigned _localWorkSize = ethash_cl_miner::c_defaultLocalWorkSize;
-        unsigned _msPerBatch = ethash_cl_miner::c_defaultMSPerBatch;
+        unsigned globalWorkSizeMultiplier = ethash_cl_miner::c_defaultGlobalWorkSizeMultiplier;
+        unsigned localWorkSize = ethash_cl_miner::c_defaultLocalWorkSize;
+        unsigned msPerBatch = ethash_cl_miner::c_defaultMSPerBatch;
     };
 
     EthereumMiner();
@@ -75,17 +73,24 @@ public:
         return _configuration;
     }
 
+    int hashrate();
     void listAvailableGPUs() { dev::eth::EthashGPUMiner::listDevices(); }
 
+    void saveSettings(QSettings& settings);
+    void loadSettings(QSettings& settings);
+
 public slots:
-    void run();
+    void startMining();
+    void stopMining();
+    void restartMining();
 
 private slots:
+    void begin();
+    void halt();
+    void handleDisconnect();
     void connectToServer();
     void login();
     void processWorkPackage(QString headerHash, QString seedHash, QString boundary);
-
-    void updateHashrate();
 
 signals:
     void hashrate(int hashrate);
@@ -96,8 +101,9 @@ signals:
     void error(QString message);
 
 private:
-    MiningStatus _miningStatus;
-    EthereumProtocol _ethereumProtocol;
+    const char* sealerString(MinerType minerType);
+
+    EthereumProtocol *_ethereumProtocol;
 
     MiningConfiguration _configuration;
 
@@ -105,8 +111,9 @@ private:
     dev::eth::GenericFarm<dev::eth::EthashProofOfWork> _powFarm;
     dev::eth::EthashAux::FullType dag;
 
-    QTimer *_hashrateReportTimer;
+    int _hashrateMHs;
+    QTimer *_hashratePollTimer;
 
-    void prepareMiner();
+    void beginMining();
 };
 

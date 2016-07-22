@@ -26,39 +26,40 @@
 
 EthereumProtocol::EthereumProtocol(QObject *parent) :
     QObject(parent) {
-    connect(&_stratumClient, SIGNAL(jsonReplyReceived(QString,QJsonArray)),
+    _stratumClient = new StratumClient();
+    connect(_stratumClient, SIGNAL(jsonReplyReceived(QString,QJsonArray)),
             this, SLOT(translateReply(QString,QJsonArray)));
 }
 
 StratumClient *EthereumProtocol::stratumClient() {
-    return &_stratumClient;
+    return _stratumClient;
 }
 
 void EthereumProtocol::eth_login(QString username, QString password) {
-    _stratumClient.sendJsonRpc(ETH_LOGIN, { username, password });
+    _stratumClient->sendJsonRpc(ETH_LOGIN, { username, password });
 }
 
 void EthereumProtocol::eth_getWork() {
-    _stratumClient.sendJsonRpc(ETH_GETWORK, { });
+    _stratumClient->sendJsonRpc(ETH_GETWORK, { });
 }
 
 void EthereumProtocol::eth_submitWork(QString nonce, QString headerHash, QString mixHash) {
-    _stratumClient.sendJsonRpc(ETH_SUBMITWORK, { nonce, headerHash, mixHash });
+    _stratumClient->sendJsonRpc(ETH_SUBMITWORK, { nonce, headerHash, mixHash });
 }
 
 void EthereumProtocol::translateReply(QString method, QJsonArray result) {
     if (method == "" || method == ETH_GETWORK) {
-        qDebug() << "Push: New work package received";
+        qDebug() << "Received new work package." << (method == "" ? "(Push from server)" : "(Requested)");
         emit eth_getWork(result[0].toString(), result[1].toString(), result[2].toString());
     }
 
     if (method == ETH_LOGIN) {
-        qDebug() << "Login to stratum server successful";
+        qDebug() << "Logged in.";
         emit eth_login(true);
     }
 
     if (method == ETH_SUBMITWORK) {
-        qDebug() << "Share submitted to server!";
+        qDebug() << "Submitted work.";
         emit eth_submitWork(true);
     }
 }

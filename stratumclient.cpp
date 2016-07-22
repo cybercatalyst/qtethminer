@@ -25,8 +25,9 @@
 // Own includes
 #include "stratumclient.h"
 
-StratumClient::StratumClient(QObject *parent) : QObject(parent) {
-    _tcpSocket = new QTcpSocket(this);
+StratumClient::StratumClient(QObject *parent) :
+    QObject(parent) {
+    _tcpSocket = new QTcpSocket();
     connect(_tcpSocket, SIGNAL(connected()),
             this, SLOT(connected()));
     connect(_tcpSocket, SIGNAL(disconnected()),
@@ -36,18 +37,14 @@ StratumClient::StratumClient(QObject *parent) : QObject(parent) {
 }
 
 void StratumClient::connectToServer(QString server, uint port) {
-    qDebug() << "Connecting to stratum server "
-             << server << ":" << port;
     _tcpSocket->connectToHost(server, port);
 }
 
 void StratumClient::connected() {
-    qDebug() << "Connection to stratum server established.";
     emit connectedToServer();
 }
 
 void StratumClient::disconnected() {
-    qDebug() << "Connection to stratum server lost.";
     emit disconnectedFromServer();
 }
 
