@@ -87,8 +87,8 @@ public:
     int hashrate();
     void listAvailableGPUs() { dev::eth::EthashGPUMiner::listDevices(); }
 
-    void saveSettings(QSettings& settings);
-    void loadSettings(QSettings& settings);
+    void saveSettings(QSettings *settings);
+    void loadSettings(QSettings *settings);
 
     Step currentStep();
 

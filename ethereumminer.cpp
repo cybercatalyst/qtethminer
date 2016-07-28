@@ -87,37 +87,37 @@ int EthereumMiner::hashrate() {
     return (int)wp.rate();
 }
 
-void EthereumMiner::saveSettings(QSettings& settings) {
+void EthereumMiner::saveSettings(QSettings* settings) {
     switch(_configuration.minerType) {
         case CPUMiner:
-            settings.setValue("minerType", "CPUMiner");
+            settings->setValue("minerType", "CPUMiner");
         break;
         case OpenCLMiner:
-            settings.setValue("minerType", "OpenCLMiner");
+            settings->setValue("minerType", "OpenCLMiner");
         break;
     }
 
-    settings.setValue("openclPlatform", _configuration.openclPlatform);
-    settings.setValue("openclDevice", _configuration.openclDevice);
-    settings.setValue("maxMiningThreads", _configuration.maxMiningThreads);
-    settings.setValue("currentBlock", (int)_configuration.currentBlock);
-    settings.setValue("recognizeCPUAsOpenCLDevice", _configuration.recognizeCPUAsOpenCLDevice);
-    settings.setValue("extraGPUMemory", _configuration.extraGPUMemory);
-    settings.setValue("precomputeNextDAG", _configuration.precomputeNextDAG);
-    settings.setValue("username", _configuration.username);
-    settings.setValue("password", _configuration.password);
-    settings.setValue("server", _configuration.server);
-    settings.setValue("port", _configuration.port);
-    settings.setValue("globalWorkSizeMultiplier", _configuration.globalWorkSizeMultiplier);
-    settings.setValue("localWorkSize", _configuration.localWorkSize);
-    settings.setValue("msPerBatch", _configuration.msPerBatch);
-    settings.sync();
+    settings->setValue("openclPlatform", _configuration.openclPlatform);
+    settings->setValue("openclDevice", _configuration.openclDevice);
+    settings->setValue("maxMiningThreads", _configuration.maxMiningThreads);
+    settings->setValue("currentBlock", (int)_configuration.currentBlock);
+    settings->setValue("recognizeCPUAsOpenCLDevice", _configuration.recognizeCPUAsOpenCLDevice);
+    settings->setValue("extraGPUMemory", _configuration.extraGPUMemory);
+    settings->setValue("precomputeNextDAG", _configuration.precomputeNextDAG);
+    settings->setValue("username", _configuration.username);
+    settings->setValue("password", _configuration.password);
+    settings->setValue("server", _configuration.server);
+    settings->setValue("port", _configuration.port);
+    settings->setValue("globalWorkSizeMultiplier", _configuration.globalWorkSizeMultiplier);
+    settings->setValue("localWorkSize", _configuration.localWorkSize);
+    settings->setValue("msPerBatch", _configuration.msPerBatch);
+    settings->sync();
 }
 
-void EthereumMiner::loadSettings(QSettings& settings) {
-    settings.sync();
+void EthereumMiner::loadSettings(QSettings *settings) {
+    settings->sync();
 
-    QString minerTypeString = settings.value("minerType", "CPUMiner").toString();
+    QString minerTypeString = settings->value("minerType", "CPUMiner").toString();
     if(minerTypeString == "CPUMiner") {
         _configuration.minerType = CPUMiner;
     } else
@@ -125,20 +125,20 @@ void EthereumMiner::loadSettings(QSettings& settings) {
         _configuration.minerType = OpenCLMiner;
     }
 
-    _configuration.openclPlatform = settings.value("openclPlatform", 0).toInt();
-    _configuration.openclDevice = settings.value("openclDevice", 0).toInt();
-    _configuration.maxMiningThreads = settings.value("maxMiningThreads", UINT_MAX).toInt();
-    _configuration.currentBlock = settings.value("currentBlock", 0).toInt();
-    _configuration.recognizeCPUAsOpenCLDevice = settings.value("recognizeCPUAsOpenCLDevice", false).toBool();
-    _configuration.extraGPUMemory = settings.value("extraGPUMemory", 64000000).toInt();
-    _configuration.precomputeNextDAG = settings.value("precomputeNextDAG", true).toBool();
-    _configuration.username = settings.value("username", "0x0.rig1").toString();
-    _configuration.password = settings.value("password", "unused").toString();
-    _configuration.server = settings.value("server", "eu1.ethermine.org").toString();
-    _configuration.port = settings.value("port", 4444).toInt();
-    _configuration.globalWorkSizeMultiplier = settings.value("globalWorkSizeMultiplier", ethash_cl_miner::c_defaultGlobalWorkSizeMultiplier).toInt();
-    _configuration.localWorkSize = settings.value("localWorkSize", ethash_cl_miner::c_defaultLocalWorkSize).toInt();
-    _configuration.msPerBatch = settings.value("msPerBatch", ethash_cl_miner::c_defaultMSPerBatch).toInt();
+    _configuration.openclPlatform = settings->value("openclPlatform", 0).toInt();
+    _configuration.openclDevice = settings->value("openclDevice", 0).toInt();
+    _configuration.maxMiningThreads = settings->value("maxMiningThreads", UINT_MAX).toInt();
+    _configuration.currentBlock = settings->value("currentBlock", 0).toInt();
+    _configuration.recognizeCPUAsOpenCLDevice = settings->value("recognizeCPUAsOpenCLDevice", false).toBool();
+    _configuration.extraGPUMemory = settings->value("extraGPUMemory", 64000000).toInt();
+    _configuration.precomputeNextDAG = settings->value("precomputeNextDAG", true).toBool();
+    _configuration.username = settings->value("username", "0x0.rig1").toString();
+    _configuration.password = settings->value("password", "unused").toString();
+    _configuration.server = settings->value("server", "eu1.ethermine.org").toString();
+    _configuration.port = settings->value("port", 4444).toInt();
+    _configuration.globalWorkSizeMultiplier = settings->value("globalWorkSizeMultiplier", ethash_cl_miner::c_defaultGlobalWorkSizeMultiplier).toInt();
+    _configuration.localWorkSize = settings->value("localWorkSize", ethash_cl_miner::c_defaultLocalWorkSize).toInt();
+    _configuration.msPerBatch = settings->value("msPerBatch", ethash_cl_miner::c_defaultMSPerBatch).toInt();
 }
 
 EthereumMiner::Step EthereumMiner::currentStep() {
