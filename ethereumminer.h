@@ -52,7 +52,7 @@ public:
         BuildingDAG
     };
 
-    struct MiningConfiguration {
+    struct Configuration {
         MinerType minerType;
         unsigned openclPlatform;
         unsigned openclDevice;
@@ -76,11 +76,11 @@ public:
 
     QThread *processInBackground();
 
-    void setMiningConfiguration(MiningConfiguration miningConfiguration) {
-        _configuration = miningConfiguration;
+    void setConfiguration(Configuration configuration) {
+        _configuration = configuration;
     }
 
-    MiningConfiguration miningConfiguration() {
+    Configuration configuration() {
         return _configuration;
     }
 
@@ -89,6 +89,8 @@ public:
 
     void saveSettings(QSettings& settings);
     void loadSettings(QSettings& settings);
+
+    Step currentStep();
 
 public slots:
     void startMining();
@@ -115,10 +117,13 @@ signals:
 
 private:
     const char* sealerString(MinerType minerType);
+    void setCurrentStep(Step step);
 
     EthereumProtocol *_ethereumProtocol;
 
-    MiningConfiguration _configuration;
+    Configuration _configuration;
+
+    Step _currentStep;
 
     dev::eth::EthashProofOfWork::WorkPackage _currentWorkPackage;
     dev::eth::GenericFarm<dev::eth::EthashProofOfWork> _powFarm;

@@ -35,6 +35,8 @@ EthereumMiner::EthereumMiner(QObject *parent) :
     connect(_ethereumProtocol, SIGNAL(eth_login(bool)), _ethereumProtocol, SLOT(eth_getWork()));
     // Evertime we receive a work package, work on it.
     connect(_ethereumProtocol, SIGNAL(eth_getWork(QString,QString,QString)), this, SLOT(processWorkPackage(QString,QString,QString)));
+
+    setCurrentStep(Halted);
 }
 
 EthereumMiner::~EthereumMiner() {
@@ -48,12 +50,12 @@ QThread* EthereumMiner::processInBackground() {
 }
 
 void EthereumMiner::startMining() {
-    emit currentStep(Starting);
+    setCurrentStep(Starting);
     QMetaObject::invokeMethod(this, "begin");
 }
 
 void EthereumMiner::stopMining() {
-    emit currentStep(Halted);
+    setCurrentStep(Halted);
     QMetaObject::invokeMethod(this, "halt");
 }
 
@@ -70,12 +72,12 @@ void EthereumMiner::handleDisconnect() {
 }
 
 void EthereumMiner::connectToServer() {
-    emit currentStep(Connecting);
+    setCurrentStep(Connecting);
     _ethereumProtocol->stratumClient()->connectToServer(_configuration.server, _configuration.port);
 }
 
 void EthereumMiner::login() {
-    emit currentStep(LoggingIn);
+    setCurrentStep(LoggingIn);
     _ethereumProtocol->eth_login(_configuration.username, _configuration.password);
 }
 
@@ -139,8 +141,12 @@ void EthereumMiner::loadSettings(QSettings& settings) {
     _configuration.msPerBatch = settings.value("msPerBatch", ethash_cl_miner::c_defaultMSPerBatch).toInt();
 }
 
+EthereumMiner::Step EthereumMiner::currentStep() {
+    return _currentStep;
+}
+
 void EthereumMiner::processWorkPackage(QString headerHash, QString seedHash, QString boundary) {
-    emit currentStep(Mining);
+    setCurrentStep(Mining);
     emit receivedWorkPackage(headerHash, seedHash, boundary);
 
     dev::h256 newHeaderHash(headerHash.toStdString());
@@ -152,10 +158,10 @@ void EthereumMiner::processWorkPackage(QString headerHash, QString seedHash, QSt
 
     if(!(dag = dev::eth::EthashAux::full(newSeedHash, true, [&](unsigned progressCount) {
        emit dagCreationProgress(progressCount);
-       emit currentStep(BuildingDAG);
+       setCurrentStep(BuildingDAG);
        return 0;
     }))) {
-        emit dagCreationFailure();
+       emit dagCreationFailure();
     }
 
     if(_configuration.precomputeNextDAG) {
@@ -236,3 +242,9 @@ const char* EthereumMiner::sealerString(MinerType minerType) {
             return "unknown";
     }
 }
+
+void EthereumMiner::setCurrentStep(Step step) {
+    _currentStep = step;
+    emit currentStep(_currentStep);
+}
+
